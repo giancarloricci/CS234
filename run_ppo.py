@@ -20,7 +20,6 @@ def evaluate(env, policy):
             break
     return model_return
 
-
 class EvalCallback(sb3.common.callbacks.BaseCallback):
     def __init__(self, eval_period, num_episodes, env, policy):
         super().__init__()
@@ -54,22 +53,30 @@ if __name__ == "__main__":
         "--wind-mode",
         type=int,
         help="The type of wind",
-        default=0,
+        default=2,
     )
+
+    parser.add_argument(
+        "--wind-interval",
+        type=int,
+        help="The duration of wind flips",
+        default=100000,
+    )
+
     args = parser.parse_args()
 
     output_path = pathlib.Path(__file__).parent.joinpath(
         "results",
-        f"lunar={args.seed},wind-mode={args.wind_mode}",
+        f"lunar={args.seed},wind-mode={args.wind_mode},wind-interval={args.wind_interval}",
     )
 
     model_output = output_path.joinpath("model.zip")
     log_path = output_path.joinpath("log.txt")
     scores_output = output_path.joinpath("scores.npy")
     plot_output = output_path.joinpath("scores.png")
-    env = LunarLander(render_mode="human", wind_mode=WindMode(args.wind_mode))
+    env = LunarLander(render_mode="human", wind_mode=WindMode(args.wind_mode), wind_interval=args.wind_interval)
 
-    agent = sb3.PPO("MlpPolicy", env, verbose=1)
+    agent = sb3.PPO("MlpPolicy", env, verbose=1) # policy_kwargs = {"activation_fn": CReLU, "net_arch": dict(pi=[64, 128], vf=[64, 128])})
     eval_callback = EvalCallback(
        args.rl_steps // 100,
        10,

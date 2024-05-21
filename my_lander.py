@@ -54,6 +54,7 @@ VIEWPORT_H = 400
 class WindMode(Enum):
     CONSTANT = 0
     NON_PERIODIC = 1
+    TIME_DEPENDENT = 2 
 
 class ContactDetector(contactListener):
     def __init__(self, env):
@@ -202,7 +203,8 @@ class LunarLander(gym.Env, EzPickle):
         enable_wind: bool = False,
         wind_power: float = 15.0,
         turbulence_power: float = 1.5,
-        wind_mode: WindMode = WindMode.CONSTANT
+        wind_mode: WindMode = WindMode.CONSTANT,
+        wind_interval: int = 100000
     ):
         EzPickle.__init__(
             self,
@@ -212,7 +214,8 @@ class LunarLander(gym.Env, EzPickle):
             enable_wind,
             wind_power,
             turbulence_power,
-            wind_mode
+            wind_mode,
+            wind_interval
         )
 
         assert (
@@ -242,6 +245,7 @@ class LunarLander(gym.Env, EzPickle):
         self.wind_mode = wind_mode
         self.wind_idx = np.random.randint(-9999, 9999)
         self.torque_idx = np.random.randint(-9999, 9999)
+        self.wind_interval = wind_interval
 
         self.screen: pygame.Surface = None
         self.clock = None
@@ -461,8 +465,10 @@ class LunarLander(gym.Env, EzPickle):
             # the function used for wind is tanh(sin(2 k x) + sin(pi k x)),
             # which is proven to never be periodic, k = 0.01
 
-            if self.wind_mode == WindMode.CONSTANT:
+            if self.wind_mode == WindMode.CONSTANT:   
                 wind_mag = self.wind_power
+            if self.wind_mode == WindMode.TIME_DEPENDENT:
+                wind_mag = self.wind_power * ((self.wind_idx // self.wind_interval) % 2)
             else: 
                 wind_mag = (
                     math.tanh(
