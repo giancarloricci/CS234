@@ -103,11 +103,11 @@ if __name__ == "__main__":
     mean_reward, std_reward = evaluate_policy(agent, agent.get_env(), n_eval_episodes=10)
     print(f"mean reward: {mean_reward}, std_reward: {std_reward}")
 
-    # observe policy
-    # print("rendering leanred policy")
-    # env = agent.get_env()
-    # obs = env.reset()
-    # while True:
-    #     action, _states = agent.predict(obs, deterministic=True)
-    #     obs, rewards, dones, info = env.step(action)
-    #     env.render("human")
+    #observe policy
+    print("rendering leanred policy")
+    env = agent.get_env()
+    obs = env.reset()
+    while True:
+        action, _states = agent.predict(obs, deterministic=True)
+        obs, rewards, dones, info = env.step(action)
+        env.render("human")

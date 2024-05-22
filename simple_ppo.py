@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch.distributions import MultivariateNormal
 from torch.distributions import Categorical
+import copy
 
 
 class CReLU(nn.Module):
@@ -76,7 +77,6 @@ class ActorCritic(nn.Module):
             nn.Linear(first_layer_output_dim, 1)
         )
 
-
     def act(self, state):
         action_probs = self.actor(state)
         dist = Categorical(action_probs)
@@ -96,25 +96,44 @@ class ActorCritic(nn.Module):
 
 
 class PPO:
-    def __init__(self, state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip, has_continuous_action_space, action_std_init=0.6):
-
-        self.has_continuous_action_space = has_continuous_action_space
-
+    def __init__(self, state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip, use_crelu, l2_init, save_weights):
         self.gamma = gamma
         self.eps_clip = eps_clip
         self.K_epochs = K_epochs
+        self.use_crelu = use_crelu
         
         self.buffer = RolloutBuffer()
 
-        self.policy = ActorCritic(state_dim, action_dim)
+        self.policy = ActorCritic(state_dim, action_dim, use_crelu)
         self.optimizer = torch.optim.Adam([
                         {'params': self.policy.actor.parameters(), 'lr': lr_actor},
-                        {'params': self.policy.critic.parameters(), 'lr': lr_critic}
+                        {'params': self.policy.critic.parameters(), 'lr': lr_critic}   
                     ])
 
-        self.policy_old = ActorCritic(state_dim, action_dim)
+        self.policy_old = ActorCritic(state_dim, action_dim, use_crelu)
         self.policy_old.load_state_dict(self.policy.state_dict())
         
+        if l2_init:
+          self.initial_actor_weights = copy.deepcopy(self.policy.actor.state_dict())
+          self.initial_critic_weights = copy.deepcopy(self.policy.critic.state_dict())
+          str_crelu = "True" if use_crelu else "False"
+          if save_weights:
+            # Save weights to a file
+            print("saving weights")
+            torch.save({
+              'actor_state_dict': self.initial_actor_weights,
+              'critic_state_dict': self.initial_critic_weights
+          }, f'weights-crelu={str_crelu}.pth')
+            print("weights saved")
+          else:
+            print("loading weights")
+            loaded_weights = torch.load(f'weights-crelu={str_crelu}.pth')
+            self.initial_actor_weights = loaded_weights['actor_state_dict']
+            self.initial_critic_weights  = loaded_weights['critic_state_dict']
+
+        self.l2_penalty = 1e-4 
+        self.l2_init = l2_init
+
         self.MseLoss = nn.MSELoss()
 
 
@@ -172,10 +191,20 @@ class PPO:
             # final loss of clipped objective PPO
             loss = -torch.min(surr1, surr2) + 0.5 * self.MseLoss(state_values, rewards) - 0.01 * dist_entropy
             
-            # take gradient step
-            self.optimizer.zero_grad()
-            loss.mean().backward()
-            self.optimizer.step()
+            if self.l2_init:
+                l2_reg = 0.0
+                for name, param in self.policy.actor.named_parameters():
+                    l2_reg += torch.sum((param - self.initial_actor_weights[name].to(device)) ** 2)
+                for name, param in self.policy.critic.named_parameters():
+                    l2_reg += torch.sum((param - self.initial_critic_weights[name].to(device)) ** 2)
+
+                l2_reg *= self.l2_penalty
+                loss += l2_reg
+
+        # take gradient step
+        self.optimizer.zero_grad()
+        loss.mean().backward()
+        self.optimizer.step()
             
         # Copy new weights into old policy
         self.policy_old.load_state_dict(self.policy.state_dict())

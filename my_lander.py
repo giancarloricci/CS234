@@ -55,6 +55,8 @@ class WindMode(Enum):
     CONSTANT = 0
     NON_PERIODIC = 1
     TIME_DEPENDENT = 2 
+    SINE = 3
+    LINEAR = 4
 
 class ContactDetector(contactListener):
     def __init__(self, env):
@@ -468,6 +470,12 @@ class LunarLander(gym.Env, EzPickle):
             if self.wind_mode == WindMode.CONSTANT:   
                 wind_mag = self.wind_power
             if self.wind_mode == WindMode.TIME_DEPENDENT:
+                wind_mag = self.wind_power * ((self.wind_idx // self.wind_interval) % 2)
+            if self.wind_mode == WindMode.LINEAR:
+                wind_mag = (self.wind_idx / self.wind_interval) * self.wind_power
+            if self.wind_mode == WindMode.SINE:
+                normalized_idx = (self.wind_idx % (4 * self.wind_interval)) / (4 * self.wind_interval) * 2 * math.pi
+                wind_mag = self.wind_power * (math.sin(normalized_idx - math.pi / 2) + 1) / 2
                 wind_mag = self.wind_power * ((self.wind_idx // self.wind_interval) % 2)
             else: 
                 wind_mag = (
